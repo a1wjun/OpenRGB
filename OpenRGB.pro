@@ -72,12 +72,29 @@ for(iter, $$list($$CONTROLLER_H)) {
 }
 CONTROLLER_INCLUDES = $$unique(CONTROLLER_INCLUDES)
 
-CONTROLLER_H_WINDOWS    = $$files("Controllers/*_Windows.h",    true)
-CONTROLLER_CPP_WINDOWS  = $$files("Controllers/*_Windows.cpp",  true)
-CONTROLLER_H_LINUX      = $$files("Controllers/*_Linux.h",      true)
-CONTROLLER_CPP_LINUX    = $$files("Controllers/*_Linux.cpp",    true)
-CONTROLLER_H_MACOS      = $$files("Controllers/*_MacOS.cpp",    true)
-CONTROLLER_CPP_MACOS    = $$files("Controllers/*_MacOS.cpp",    true)
+#-----------------------------------------------------------------------------------------------#
+# Remove OS-specific files from the overall controller headers and sources lists                #
+# The suffixes _Windows, _Linux, _FreeBSD, and _MacOS are usable to denote that a file only     #
+# applies to one or more OSes.  The suffixes may be combined such as <file>_Windows_Linux.cpp.  #
+#-----------------------------------------------------------------------------------------------#
+CONTROLLER_H_WINDOWS    = $$files("Controllers/*_Windows*.h",   true)
+CONTROLLER_CPP_WINDOWS  = $$files("Controllers/*_Windows*.cpp", true)
+CONTROLLER_H_LINUX      = $$files("Controllers/*_Linux*.h",     true)
+CONTROLLER_CPP_LINUX    = $$files("Controllers/*_Linux*.cpp",   true)
+CONTROLLER_H_FREEBSD    = $$files("Controllers/*_FreeBSD*.h",   true)
+CONTROLLER_CPP_FREEBSD  = $$files("Controllers/*_FreeBSD*.cpp", true)
+CONTROLLER_H_MACOS      = $$files("Controllers/*_MacOS*.h",     true)
+CONTROLLER_CPP_MACOS    = $$files("Controllers/*_MacOS*.cpp",   true)
+
+CONTROLLER_H           -= $$CONTROLLER_H_WINDOWS
+CONTROLLER_H           -= $$CONTROLLER_H_LINUX
+CONTROLLER_H           -= $$CONTROLLER_H_FREEBSD
+CONTROLLER_H           -= $$CONTROLLER_H_MACOS
+
+CONTROLLER_CPP         -= $$CONTROLLER_CPP_WINDOWS
+CONTROLLER_CPP         -= $$CONTROLLER_CPP_LINUX
+CONTROLLER_CPP         -= $$CONTROLLER_CPP_FREEBSD
+CONTROLLER_CPP         -= $$CONTROLLER_CPP_MACOS
 
 #-----------------------------------------------------------------------------------------------#
 # OpenRGB Common                                                                                #
@@ -246,8 +263,7 @@ win32:INCLUDEPATH +=                                                            
     dependencies/NVFC                                                                           \
     wmi/                                                                                        \
 
-win32:SOURCES -= $$CONTROLLER_CPP_LINUX
-win32:SOURCES -= $$CONTROLLER_CPP_MACOS
+win32:SOURCES += $$CONTROLLER_CPP_WINDOWS
 
 win32:SOURCES +=                                                                                \
     dependencies/hueplusplus-1.1.0/src/WinHttpHandler.cpp                                       \
@@ -358,8 +374,7 @@ win32:SOURCES +=                                                                
     wmi/wmi.cpp                                                                                 \
     AutoStart/AutoStart-Windows.cpp                                                             \
 
-win32:HEADERS -= $$CONTROLLER_H_LINUX
-win32:HEADERS -= $$CONTROLLER_H_MACOS
+win32:HEADERS += $$CONTROLLER_H_WINDOWS
 
 win32:HEADERS +=                                                                                \
     dependencies/display-library/include/adl_defines.h                                          \
@@ -461,14 +476,19 @@ contains(QMAKE_PLATFORM, linux) {
 
     TARGET = $$lower($$TARGET)
 
-    HEADERS -= $$CONTROLLER_H_WINDOWS
-    HEADERS -= $$CONTROLLER_H_MACOS
+    HEADERS += $$CONTROLLER_H_LINUX
 
     HEADERS +=                                                                                  \
+    dependencies/NVFC/nvapi.h                                                                   \
     i2c_smbus/i2c_smbus_linux.h                                                                 \
     AutoStart/AutoStart-Linux.h                                                                 \
 
+    INCLUDEPATH +=                                                                              \
+    dependencies/NVFC                                                                           \
+    /usr/include/mbedtls2/                                                                      \
+
     LIBS +=                                                                                     \
+    -L/usr/lib/mbedtls2/                                                                        \
     -lmbedx509                                                                                  \
     -lmbedtls                                                                                   \
     -lmbedcrypto                                                                                \
@@ -479,7 +499,10 @@ contains(QMAKE_PLATFORM, linux) {
          LIBS += -lstdc++fs
     }
 
-    QMAKE_CXXFLAGS += -Wno-implicit-fallthrough
+    QMAKE_CXXFLAGS += -Wno-implicit-fallthrough -Wno-psabi
+
+    DEFINES +=                                                                                  \
+        OPENRGB_SYSTEM_PLUGIN_DIRECTORY=\\"\"\"$$PREFIX/lib/openrgb/plugins\\"\"\"              \
 
     #-------------------------------------------------------------------------------------------#
     # Determine which hidapi to use based on availability                                       #
@@ -503,11 +526,11 @@ contains(QMAKE_PLATFORM, linux) {
         }
     }
 
-    SOURCES -= $$CONTROLLER_CPP_WINDOWS
-    SOURCES -= $$CONTROLLER_CPP_MACOS
+    SOURCES += $$CONTROLLER_CPP_LINUX
 
     SOURCES +=                                                                                  \
     dependencies/hueplusplus-1.1.0/src/LinHttpHandler.cpp                                       \
+    dependencies/NVFC/nvapi.cpp                                                                 \
     i2c_smbus/i2c_smbus_linux.cpp                                                               \
     scsiapi/scsiapi_linux.c                                                                     \
     serial_port/find_usb_serial_port_linux.cpp                                                  \
@@ -539,10 +562,10 @@ contains(QMAKE_PLATFORM, linux) {
             udev_rules.files    = $$udev_rules.target
         } else {
             message($$udev_rules.target " - UDEV rules file missing. Adding script to build")
-            #-------------------------------------------------------------------------------------------#
-            # This is a compiler config flag to save the preproccessed .ii & .s                         #
-            #   files so as to automatically process the UDEV rules and the Supported Devices           #
-            #-------------------------------------------------------------------------------------------#
+            #-----------------------------------------------------------------------------------#
+            # This is a compiler config flag to save the preproccessed .ii & .s                 #
+            #   files so as to automatically process the UDEV rules and the Supported Devices   #
+            #-----------------------------------------------------------------------------------#
             QMAKE_CXXFLAGS+=-save-temps
             QMAKE_CXXFLAGS-=-pipe
             udev_rules.extra    = $$PWD/scripts/build-udev-rules.sh $$PWD $$GIT_COMMIT_ID
@@ -551,7 +574,7 @@ contains(QMAKE_PLATFORM, linux) {
     }
 
     #-------------------------------------------------------------------------------------------#
-    # Add static files to installation                                                                      #
+    # Add static files to installation                                                          #
     #-------------------------------------------------------------------------------------------#
     target.path=$$PREFIX/bin/
     desktop.path=$$PREFIX/share/applications/
@@ -573,6 +596,8 @@ contains(QMAKE_PLATFORM, freebsd) {
     libusb-1.0
 
     TARGET = $$lower($$TARGET)
+
+    HEADERS += $$CONTROLLER_H_FREEBSD
 
     HEADERS +=                                                                                  \
     AutoStart/AutoStart-FreeBSD.h                                                               \
@@ -615,6 +640,8 @@ contains(QMAKE_PLATFORM, freebsd) {
         }
     }
 
+    SOURCES += $$CONTROLLER_CPP_FREEBSD
+
     SOURCES +=                                                                                  \
     dependencies/hueplusplus-1.1.0/src/LinHttpHandler.cpp                                       \
     serial_port/find_usb_serial_port_linux.cpp                                                  \
@@ -626,7 +653,6 @@ contains(QMAKE_PLATFORM, freebsd) {
     Controllers/SeagateController/SeagateControllerDetect.cpp                                   \
     Controllers/ENESMBusController/ROGArionDetect.cpp                                           \
     Controllers/ENESMBusController/ENESMBusInterface/ENESMBusInterface_ROGArion.cpp             \
-    $$CONTROLLER_CPP_WINDOWS                                                                    \
 
     #-------------------------------------------------------------------------------------------#
     # Set up install paths                                                                      #
@@ -660,9 +686,9 @@ unix:!macx:CONFIG(asan) {
 #-----------------------------------------------------------------------------------------------#
 QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.15
 
-#-------------------------------------------------------------------------------------------#
-# Common MacOS definitions                                                                  #
-#-------------------------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------------------------#
+# Common MacOS definitions                                                                      #
+#-----------------------------------------------------------------------------------------------#
 macx {
     CONFIG += link_pkgconfig
 
@@ -680,8 +706,7 @@ macx {
     AutoStart/AutoStart-MacOS.h                                                                 \
     qt/macutils.h                                                                               \
 
-    HEADERS -= $$CONTROLLER_H_WINDOWS
-    HEADERS -= $$CONTROLLER_H_LINUX
+    HEADERS += $$CONTROLLER_H_MACOS
 
     SOURCES +=                                                                                  \
     dependencies/hueplusplus-1.1.0/src/LinHttpHandler.cpp                                       \
@@ -689,8 +714,7 @@ macx {
     AutoStart/AutoStart-MacOS.cpp                                                               \
     qt/macutils.mm                                                                              \
 
-    SOURCES -= $$CONTROLLER_CPP_WINDOWS
-    SOURCES -= $$CONTROLLER_CPP_LINUX
+    SOURCES += $$CONTROLLER_CPP_MACOS
 
     # Use mbedtls v2 instead of latest
     MBEDTLS_PREFIX = $$system(brew --prefix mbedtls@2)
@@ -712,9 +736,9 @@ macx {
     QMAKE_INFO_PLIST = $$OUT_PWD/Info.plist
 }
 
-#-------------------------------------------------------------------------------------------#
-# Apple Silicon (arm64) Homebrew installs at /opt/homebrew                                  #
-#-------------------------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------------------------#
+# Apple Silicon (arm64) Homebrew installs at /opt/homebrew                                      #
+#-----------------------------------------------------------------------------------------------#
 macx:contains(QMAKE_HOST.arch, arm64) {
     INCLUDEPATH +=                                                                              \
     /opt/homebrew/include                                                                       \
@@ -726,9 +750,9 @@ macx:contains(QMAKE_HOST.arch, arm64) {
     -L/opt/homebrew/lib                                                                         \
 }
 
-#-------------------------------------------------------------------------------------------#
-# Intel (x86_64) Homebrew installs at /usr/local/lib                                        #
-#-------------------------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------------------------#
+# Intel (x86_64) Homebrew installs at /usr/local/lib                                            #
+#-----------------------------------------------------------------------------------------------#
 macx:contains(QMAKE_HOST.arch, x86_64) {
     INCLUDEPATH +=                                                                              \
     dependencies/macUSPCIO                                                                      \

@@ -699,7 +699,7 @@ razer_report RazerController::razer_create_custom_frame_extended_matrix_report(u
     const size_t row_length     = (size_t)(((stop_col + 1) - start_col) * 3);
     const size_t packet_length  = row_length + 5;
 
-    razer_report report         = razer_create_report(0x0F, 0x03, packet_length);
+    razer_report report         = razer_create_report(0x0F, 0x03, (unsigned char)packet_length);
 
     report.arguments[2]         = row_index;
     report.arguments[3]         = start_col;
@@ -718,7 +718,7 @@ razer_report RazerController::razer_create_custom_frame_standard_matrix_report(u
     const size_t row_length     = (size_t)(((stop_col + 1) - start_col) * 3);
     const size_t packet_length  = row_length + 4;
 
-    razer_report report         = razer_create_report(0x03, 0x0B, packet_length);
+    razer_report report         = razer_create_report(0x03, 0x0B, (unsigned char)packet_length);
 
     report.arguments[0]         = 0xFF;
     report.arguments[1]         = row_index;
@@ -1008,7 +1008,7 @@ std::string RazerController::razer_get_serial()
     std::this_thread::sleep_for(5ms);
     razer_usb_receive(&response_report);
 
-    strncpy(&serial_string[0], (const char*)&response_report.arguments[0], 22);
+    memcpy(&serial_string[0], &response_report.arguments[0], 22);
     serial_string[22] = '\0';
 
     for(size_t i = 0; i < 22; i++)
